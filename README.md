@@ -34,18 +34,18 @@ No special headers are needed: the page does not use `SharedArrayBuffer`, so it 
 
 ## Presenting (audience on their own devices)
 
-Put the short URL or a QR code on screen. Each listener opens it on a phone or laptop and taps **Test my device**:
+Put the short URL or a QR code on screen. Each listener opens it on a phone or laptop and taps **Start test**. The page has two views: a start page (three instructions, one button, a WebGPU check) and a result page (the image, the three timings, the headline speedup, and two collapsed sections: *Explore the image* and *How this test works*).
 
 - **Auto size** first times one CPU core on a tiny image, then picks the largest image (up to 3840 px wide) for which one core takes about 2 seconds on *that* device. The whole test (1 core, all cores, GPU) takes about 5 seconds, so phones do not overheat.
-- The result card says how many times faster the GPU was than one core and than all cores, plus the GPU name the browser reports (often just the vendor).
+- The headline says how many times faster the GPU was than one core and than all cores; the start page shows the GPU name the browser reports (often just the vendor).
 - Nothing heavy runs on page load, and no data leaves the device (there is no server; ask for a show of hands instead: "who got more than 50×? more than 100×?").
 - Without WebGPU (older iPhones before iOS 26, older Android, Firefox on Android) the page says so and still compares 1 core against all cores.
 
-Presenter keys: `T` runs the test, `1` `2` `3` switch mode, `D` deep zoom, `R` reset. Click/tap to zoom in; **Zoom out**, Shift-click, or right-click to zoom out.
+Presenter keys: `T` runs the test (from either page), and on the result page `1` `2` `3` switch mode, `D` deep zoom, `R` reset. Click/tap the image to zoom in; *Explore the image* has Zoom out, size, and iteration controls.
 
 Suggested flow (about 2 minutes): show the QR code; while people open it, run the test on the projector (`T`) and narrate 1 core → all cores → GPU; ask for a show of hands; optionally press `D` and switch `2`/`3` to show the FP32 vs FP64 difference.
 
-Measured in Edge on an 8-core Apple laptop (Auto, 500 iterations, ~3100 × 1940): 1 core 1.9 s, 8 cores 0.4 s (~5×), GPU 12–13 ms (~150×). Speedups depend on the device.
+Measured in Edge on an 8-core Apple laptop (Auto, 500 iterations): 1 core 2.0 s, 8 cores 0.43 s (~5×), GPU 14 ms (~140×). Speedups depend on the device.
 
 ## Caveats to say out loud
 
