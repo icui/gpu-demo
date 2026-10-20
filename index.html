@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>How fast is your GPU?</title>
+<title>Scientific computing on your device · GPU test</title>
 <link rel="icon" href="data:,">
 <style>
   :root { --navy:#15253d; --teal:#087e8b; --orange:#cb5a20; --blue:#285fbd; --grey:#526379; --line:#dce4ec; --bg:#f5f7fa; }
@@ -17,7 +17,9 @@
   /* ---------- start view ---------- */
   #start { min-height: calc(100vh - 8px); display: flex; align-items: center; justify-content: center; padding: 24px; }
   .intro { width: 100%; max-width: 560px; text-align: center; }
-  .intro h1 { font-size: 40px; margin: 0 0 18px; }
+  .intro h1 { font-size: 38px; line-height: 1.15; margin: 0 0 16px; }
+  .kicker-top { text-transform: uppercase; letter-spacing: 2px; font-size: 13px; font-weight: bold; color: var(--teal); margin-bottom: 12px; }
+  .lede { font-size: 18px; line-height: 1.5; color: var(--grey); margin: 0 0 22px; }
   .intro ol { text-align: left; display: inline-block; margin: 0 0 30px; padding-left: 26px; font-size: 19px; line-height: 1.5; color: var(--navy); }
   .intro li { margin: 6px 0; }
   .go { display: block; width: 100%; padding: 18px; border: 0; border-radius: 12px; background: var(--teal); color: white;
@@ -39,6 +41,11 @@
   .headline .kicker { color: var(--grey); font-size: 15px; }
   .headline .big { font-size: 34px; font-weight: bold; color: var(--teal); line-height: 1.15; margin: 4px 0; }
   .headline .sub { font-size: 16px; line-height: 1.4; }
+  .history { background: white; border: 1px solid var(--line); border-left: 6px solid var(--navy); border-radius: 10px; padding: 14px 18px; margin-top: 12px; }
+  .history .kicker { color: var(--grey); font-size: 15px; }
+  .history .hline { font-size: 17px; line-height: 1.45; margin: 6px 0; }
+  .history .hline b { color: var(--teal); }
+  .history .hnote { color: var(--grey); font-size: 13px; line-height: 1.4; }
   .steps { list-style: none; padding: 0; margin: 16px 0; }
   .steps li { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; background: white;
               border: 1px solid var(--line); border-left: 6px solid #c4cfdb; border-radius: 8px; padding: 11px 14px; margin: 8px 0; font-size: 17px; }
@@ -76,7 +83,8 @@
     .stage { width: 100%; }
   }
   @media (max-width: 640px) {
-    .intro h1 { font-size: 30px; }
+    .intro h1 { font-size: 28px; }
+    .lede { font-size: 16px; }
     .intro ol { font-size: 17px; }
     #result { padding: 12px 12px 28px; }
     .headline .big { font-size: 28px; }
@@ -89,11 +97,14 @@
 <!-- ===== Page 1: start ===== -->
 <section id="start">
   <div class="intro">
-    <h1>How fast is your GPU?</h1>
+    <div class="kicker-top">What is a GPU? · Princeton GPU Bootcamp 2026</div>
+    <h1>Test the potential of scientific computing on your device with its GPU</h1>
+    <p class="lede">Simulations, imaging, and AI all repeat the same calculation over millions of data points. GPUs are built for exactly
+       that, and almost every phone and laptop has one. Let's measure yours.</p>
     <ol>
-      <li>Tap <b>Start test</b> and keep this page open.</li>
-      <li>Your device draws the same image three ways: one CPU core, all CPU cores, then the GPU.</li>
-      <li>Compare the times. It takes about five seconds.</li>
+      <li>Tap <b>Start test</b> and keep this page open (about five seconds).</li>
+      <li>Your device computes the same image three ways: one CPU core, all CPU cores, then the GPU.</li>
+      <li>Every pixel is an independent calculation, the data-parallel pattern behind scientific computing.</li>
     </ol>
     <button class="go" id="go">Start test</button>
     <div class="status" id="status">Checking for WebGPU…</div>
@@ -115,6 +126,13 @@
         <div class="kicker" id="kicker">Testing your device…</div>
         <div class="big" id="big">&nbsp;</div>
         <div class="sub" id="sub">&nbsp;</div>
+      </div>
+
+      <div class="history" id="history" hidden>
+        <div class="kicker">In supercomputer terms</div>
+        <div class="hline" id="hline"></div>
+        <div class="hnote">Rough comparison: past machines are rated by the LINPACK benchmark in 64-bit precision; this estimate counts
+          about 8 operations per Mandelbrot step in 32-bit (GPU) or 64-bit (CPU) precision.</div>
       </div>
 
       <ul class="steps">
@@ -168,6 +186,7 @@
              exactly the kind of work GPUs are built for.</p>
           <p><b>CPU</b>: plain JavaScript, first in one worker thread, then one worker per core.
              <b>GPU</b>: a WebGPU compute kernel with one GPU thread per pixel, timed after a warm-up launch (best of three).</p>
+          <p><b>Supercomputer comparison</b>: the CPU run counts every Mandelbrot step; at about 8 floating-point operations per step, dividing by the GPU time gives an estimated speed, compared with the world's fastest computers of the past (TOP500 No. 1 LINPACK results; Cray peak speeds). It is an order-of-magnitude comparison, not a benchmark.</p>
           <p><b>Size</b> adapts to your device: the page picks the largest image for which one CPU core takes about two seconds.</p>
           <p>This is a demonstration, not a benchmark: optimized, vectorized C would make the CPU faster. Phones may throttle when hot
              or in low-power mode. Nothing is sent anywhere; all computation stays on your device.</p>
@@ -211,7 +230,7 @@ const workerSrc = `
 self.onmessage = (e) => {
   const { gen, y0, rows, W, H, cx, cy, scale, maxIter } = e.data;
   const buf = new Uint8ClampedArray(W * rows * 4);
-  let k = 0;
+  let k = 0, iters = 0;
   for (let j = 0; j < rows; j++) {
     const y = y0 + j;
     const ci = cy + (0.5 * H - y - 0.5) * scale;
@@ -224,6 +243,7 @@ self.onmessage = (e) => {
         zr = t;
         i++;
       }
+      iters += i;
       if (i < maxIter) {
         const s = Math.sqrt(i / maxIter);
         buf[k]     = 255 * (0.5 + 0.5 * Math.cos(6.2831853 * (s * 1.5 + 0.55)));
@@ -234,7 +254,7 @@ self.onmessage = (e) => {
       k += 4;
     }
   }
-  self.postMessage({ gen, y0, rows, buf }, [buf.buffer]);
+  self.postMessage({ gen, y0, rows, buf, iters }, [buf.buffer]);
 };`;
 const workerURL = URL.createObjectURL(new Blob([workerSrc], { type: "text/javascript" }));
 const pool = [];
@@ -249,6 +269,7 @@ function getWorkers(n) {
 }
 
 let cpuJob = null;     // current progressive render
+let lastIters = 0;     // total Mandelbrot iterations in the last completed CPU render
 let calib = null;      // pending calibration { resolve }
 const STRIP = 8;
 
@@ -267,8 +288,10 @@ function onStrip(w, msg) {
   if (j && msg.gen === j.gen) {
     cpuCtx.putImageData(new ImageData(msg.buf, j.W, msg.rows), 0, msg.y0);
     j.done += msg.rows;
+    j.iters += msg.iters;
     if (j.done >= j.H) {
       const ms = performance.now() - j.t0;
+      lastIters = j.iters;
       cpuJob = null;
       w.busy = false;
       j.resolve(ms);
@@ -285,7 +308,7 @@ function renderCPU(nWorkers) {
   return new Promise((resolve) => {
     const gen = ++generation;
     const workers = getWorkers(nWorkers);
-    cpuJob = { gen, W, H, next: 0, done: 0, workers, t0: performance.now(), resolve,
+    cpuJob = { gen, W, H, next: 0, done: 0, iters: 0, workers, t0: performance.now(), resolve,
                params: { W, H, cx: view.cx, cy: view.cy, scale: view.width / W, maxIter } };
     for (const w of workers) if (!w.busy) dispatch(w);
   });
@@ -448,6 +471,33 @@ async function renderGPU() {
   return Math.min(...times);                    // best of three
 }
 
+// ---------- history: world's fastest computers (GFLOP/s) ----------
+// Cray-1/Cray-2: peak speed; from 1993 on: TOP500 No. 1 LINPACK Rmax (FP64), from top500.org.
+const HISTORY = [
+  { year: 1976, name: "Cray-1",                gf: 0.16,    procs: "1 vector processor" },
+  { year: 1985, name: "Cray-2",                gf: 1.9,     procs: "4 processors" },
+  { year: 1993, name: "CM-5 (Los Alamos)",     gf: 59.7,    procs: "1,024 processors" },
+  { year: 1994, name: "Intel Paragon XP/S 140", gf: 143.4,  procs: "3,680 processors" },
+  { year: 1996, name: "CP-PACS (Tsukuba)",     gf: 368.2,   procs: "2,048 processors" },
+  { year: 1997, name: "ASCI Red (Sandia)",     gf: 1068,    procs: "7,264 processors" },
+  { year: 1999, name: "ASCI Red, upgraded",    gf: 2379,    procs: "9,632 processors" },
+  { year: 2001, name: "ASCI White (Livermore)", gf: 7226,   procs: "8,192 processors" },
+  { year: 2002, name: "Earth Simulator",       gf: 35860,   procs: "5,120 vector processors" },
+  { year: 2005, name: "Blue Gene/L",           gf: 280600,  procs: "131,072 processors" },
+];
+const FLOP_PER_ITER = 8;   // z = z*z + c plus the |z| check: about 8 floating-point operations
+
+function fmtGF(gf) { return gf >= 1000 ? (gf / 1000).toFixed(gf >= 10000 ? 0 : 1) + " TFLOP/s" : gf.toFixed(gf >= 10 ? 0 : 1) + " GFLOP/s"; }
+
+function historyLine(gf, who) {
+  let hit = null, next = null;
+  for (const h of HISTORY) { if (h.gf <= gf) hit = h; else { next = h; break; } }
+  if (!hit) return `${who} ran at about ${fmtGF(gf)}.`;
+  let line = `${who} ran at about <b>${fmtGF(gf)}</b>, faster than <b>${hit.name}</b>, the world's fastest computer in ${hit.year} (${hit.procs}).`;
+  if (next) line += ` Next milestone: ${next.name}, ${next.year}, at ${fmtGF(next.gf)}.`;
+  return line;
+}
+
 // ---------- UI ----------
 const LABEL = { cpu1: "CPU · 1 core", cpuN: `CPU · ${nCores} cores`, gpu: "GPU" };
 const COLOR = { cpu1: "#285fbd", cpuN: "#cb5a20", gpu: "#087e8b" };
@@ -485,6 +535,7 @@ async function testDevice() {
   $("again").disabled = true;
   $("kicker").textContent = "Testing your device…";
   $("big").innerHTML = "&nbsp;"; $("sub").innerHTML = "&nbsp;";
+  $("history").hidden = true;
   for (const li of document.querySelectorAll(".steps li")) {
     li.className = ""; li.querySelector(".t").textContent = ""; li.querySelector(".x").textContent = "";
   }
@@ -500,6 +551,7 @@ async function testDevice() {
       li.classList.remove("running");
       if (ms == null) return;
       t[m] = ms;
+      if (m === "cpuN") t.iters = lastIters;
       li.classList.add("done");
       li.querySelector(".t").textContent = fmtMs(ms);
       li.querySelector(".x").textContent = fmtX(t.cpu1 / ms);
@@ -509,11 +561,14 @@ async function testDevice() {
       $("kicker").textContent = "On this device, the GPU was";
       $("big").textContent = `${fmtX(t.cpu1 / t.gpu)} faster`;
       $("sub").textContent = `than one CPU core, and ${fmtX(t.cpuN / t.gpu)} faster than all ${nCores} cores together.`;
+      $("hline").innerHTML = historyLine(t.iters * FLOP_PER_ITER / (t.gpu * 1e6), "Your GPU");
     } else {
       $("kicker").textContent = "No GPU test on this browser";
       $("big").textContent = `${fmtX(t.cpu1 / t.cpuN)} faster`;
       $("sub").textContent = `with all ${nCores} CPU cores than with one. Watch the presenter's screen for the GPU.`;
+      $("hline").innerHTML = historyLine(t.iters * FLOP_PER_ITER / (t.cpuN * 1e6), `Your ${nCores} CPU cores`);
     }
+    if (t.iters) $("history").hidden = false;
   } finally {
     testing = false;
     $("again").disabled = false;
