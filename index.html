@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Test your GPU: CPU vs GPU in your browser</title>
+<link rel="icon" href="data:,">
+<style>
+  :root { --navy:#15253d; --teal:#087e8b; --orange:#cb5a20; --blue:#285fbd; --grey:#526379; --bg:#f5f7fa; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: Arial, Helvetica, sans-serif; color: var(--navy); background: var(--bg); -webkit-text-size-adjust: 100%; }
+  header { border-top: 8px solid var(--teal); padding: 16px 24px 4px; }
+  h1 { margin: 0 0 6px; font-size: 26px; }
+  header p { margin: 0; color: var(--grey); font-size: 16px; line-height: 1.4; }
+  main { padding: 8px 24px 28px; max-width: 1500px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin: 12px 0; }
+  .modes { display: flex; flex-wrap: wrap; gap: 8px; }
+  button { font: inherit; font-size: 15px; min-height: 42px; padding: 8px 14px; border-radius: 8px; border: 2px solid var(--navy);
+           background: white; color: var(--navy); cursor: pointer; touch-action: manipulation; }
+  button:hover { background: #edf2f7; }
+  button.primary { background: var(--teal); border-color: var(--teal); color: white; font-weight: bold; font-size: 17px; padding: 10px 20px; }
+  button.primary:hover { background: #066d78; }
+  button.active[data-mode="cpu1"] { background: var(--blue); border-color: var(--blue); color: white; }
+  button.active[data-mode="cpuN"] { background: var(--orange); border-color: var(--orange); color: white; }
+  button.active[data-mode="gpu"] { background: var(--teal); border-color: var(--teal); color: white; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  label { font-size: 15px; color: var(--grey); }
+  select { font: inherit; font-size: 15px; min-height: 40px; padding: 6px; border-radius: 6px; border: 1px solid #c4cfdb; background: white; }
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 18px; align-items: start; }
+  .stage { position: relative; width: min(100%, calc((100vh - 210px) * 1.6)); aspect-ratio: 16 / 10; background: #0b1320;
+           border-radius: 10px; overflow: hidden; cursor: zoom-in; touch-action: manipulation; }
+  .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+  .badge { position: absolute; left: 10px; top: 10px; padding: 5px 11px; border-radius: 6px; color: white; font-weight: bold; font-size: 15px; background: var(--navy); pointer-events: none; }
+  .busy { position: absolute; right: 10px; top: 10px; padding: 5px 11px; border-radius: 6px; background: rgba(255,255,255,.9); font-size: 14px; display: none; pointer-events: none; }
+  .stats { display: flex; flex-direction: column; gap: 6px; font-size: 16px; }
+  .stats b { color: var(--teal); }
+  .card { background: white; border: 1px solid #dce4ec; border-top: 5px solid var(--teal); border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; display: none; }
+  .card .big { font-size: 26px; font-weight: bold; color: var(--teal); line-height: 1.2; margin: 2px 0 6px; }
+  .card .small { color: var(--grey); font-size: 14px; line-height: 1.4; }
+  table { border-collapse: collapse; margin-top: 12px; font-size: 15px; background: white; width: 100%; }
+  th, td { padding: 7px 9px; border: 1px solid #dce4ec; text-align: left; }
+  th { background: var(--navy); color: white; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .note { color: var(--grey); font-size: 14px; line-height: 1.45; max-width: 1000px; }
+  .warn { background: #fbece4; border-left: 5px solid var(--orange); padding: 10px 14px; margin: 10px 0; display: none; line-height: 1.4; }
+  details { margin-top: 14px; }
+  summary { cursor: pointer; font-weight: bold; }
+  pre { background: white; border: 1px solid #dce4ec; padding: 14px; overflow-x: auto; font-size: 13px; line-height: 1.45; }
+  kbd { border: 1px solid #c4cfdb; border-radius: 4px; padding: 1px 5px; background: white; font-size: 13px; }
+  @media (max-width: 1000px) {
+    .layout { grid-template-columns: 1fr; }
+    .stage { width: 100%; }
+  }
+  @media (max-width: 640px) {
+    header { padding: 12px 14px 2px; }
+    h1 { font-size: 21px; }
+    header p { font-size: 15px; }
+    main { padding: 6px 14px 24px; }
+    .controls { gap: 8px; }
+    .modes { width: 100%; }
+    .modes button { flex: 1 1 30%; padding: 8px 6px; font-size: 14px; }
+    button.primary { width: 100%; }
+    .desktop-only { display: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Test your GPU: Mandelbrot on CPU vs GPU</h1>
+  <p>Every pixel is an independent calculation, the same small program on different data.
+     Press <b>Test my device</b> to time one CPU core, all CPU cores, and your GPU. It takes about five seconds; nothing is sent anywhere.</p>
+</header>
+<main>
+  <div class="warn" id="warn"></div>
+
+  <div class="controls">
+    <button class="primary" id="test">Test my device</button>
+    <div class="modes">
+      <button data-mode="cpu1">CPU · 1 core</button>
+      <button data-mode="cpuN" id="btnCpuN">CPU · all cores</button>
+      <button data-mode="gpu" id="btnGpu">GPU</button>
+    </div>
+    <label>Size
+      <select id="res">
+        <option value="auto" selected>Auto (fits this device)</option>
+        <option value="160">160 × 100</option>
+        <option value="640">640 × 400</option>
+        <option value="1280">1280 × 800</option>
+        <option value="1920">1920 × 1200</option>
+        <option value="2560">2560 × 1600</option>
+        <option value="3840">3840 × 2400</option>
+      </select>
+    </label>
+    <label>Iterations
+      <select id="iter">
+        <option>100</option><option>250</option><option selected>500</option>
+        <option>1000</option><option>2000</option><option>5000</option>
+      </select>
+    </label>
+    <button id="deep">Deep zoom</button>
+    <button id="zoomOut">Zoom out</button>
+    <button id="reset">Reset</button>
+  </div>
+
+  <div class="layout">
+    <div class="stage" id="stage">
+      <canvas id="cpuCanvas"></canvas>
+      <canvas id="gpuCanvas"></canvas>
+      <div class="badge" id="badge">—</div>
+      <div class="busy" id="busy">computing…</div>
+    </div>
+
+    <div class="side">
+      <div class="card" id="card">
+        <div class="small">On this device, the GPU was</div>
+        <div class="big" id="cardBig">—</div>
+        <div id="cardLine"></div>
+        <div class="small" id="cardDevice" style="margin-top:8px"></div>
+      </div>
+      <div class="stats">
+        <span>Mode: <b id="sMode">—</b></span>
+        <span>Pixels: <b id="sPix">—</b></span>
+        <span>Time: <b id="sTime">—</b></span>
+        <span>Throughput: <b id="sRate">—</b></span>
+        <span>View width: <b id="sZoom">—</b></span>
+      </div>
+      <table id="results" hidden>
+        <thead><tr><th>Mode</th><th>Time</th><th>Mpx/s</th><th>Speedup</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <p class="note">
+    Tap or click to zoom in; use <b>Zoom out</b>, Shift-click, or right-click to zoom out.
+    <span class="desktop-only">Keys: <kbd>T</kbd> test, <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> switch mode, <kbd>D</kbd> deep zoom, <kbd>R</kbd> reset.</span>
+    <br>This is a demonstration, not a benchmark. The CPU side is plain JavaScript (one Web Worker per core); the GPU side is a WebGPU compute
+    kernel with one thread per pixel, timed after a warm-up launch (best of three). <b>Auto</b> size picks the largest image for which one CPU core
+    takes about two seconds on this device. At tiny sizes, all cores are barely faster than one: with too little work, coordination overhead dominates.
+    WebGPU has no 64-bit floats, so the GPU computes in FP32 while JavaScript uses FP64; press <b>Deep zoom</b> and compare the CPU and GPU images.
+    Phones may throttle when hot or in low-power mode.
+  </p>
+
+  <details>
+    <summary>Show the GPU kernel (WGSL), written for one pixel</summary>
+    <pre id="kernelSrc"></pre>
+  </details>
+</main>
+
+<script>
+"use strict";
+
+// ---------- shared view state ----------
+const HOME = { cx: -0.6, cy: 0.0, width: 3.4 };          // width = complex-plane units across the image
+const DEEP = { cx: -0.743643887037151, cy: 0.131825904205330, width: 2.0e-5 };
+const view = { ...HOME };
+const AUTO_TARGET_MS = 2000;                             // one CPU core should take about this long
+let mode = "gpu";
+let generation = 0;
+let autoW = 640;
+let testing = false;
+
+const $ = (id) => document.getElementById(id);
+const cpuCanvas = $("cpuCanvas"), gpuCanvas = $("gpuCanvas");
+const cpuCtx = cpuCanvas.getContext("2d");
+const nCores = Math.max(1, navigator.hardwareConcurrency || 4);
+$("btnCpuN").textContent = `CPU · ${nCores} cores`;
+
+function size() {
+  const v = $("res").value;
+  const W = v === "auto" ? autoW : +v;
+  return { W, H: Math.round(W * 10 / 16), maxIter: +$("iter").value };
+}
+
+// ---------- CPU: Web Workers (inline, so the page is one file) ----------
+const workerSrc = `
+self.onmessage = (e) => {
+  const { gen, y0, rows, W, H, cx, cy, scale, maxIter } = e.data;
+  const buf = new Uint8ClampedArray(W * rows * 4);
+  let k = 0;
+  for (let j = 0; j < rows; j++) {
+    const y = y0 + j;
+    const ci = cy + (0.5 * H - y - 0.5) * scale;
+    for (let x = 0; x < W; x++) {
+      const cr = cx + (x + 0.5 - 0.5 * W) * scale;
+      let zr = 0, zi = 0, i = 0;
+      while (i < maxIter && zr * zr + zi * zi <= 4) {
+        const t = zr * zr - zi * zi + cr;
+        zi = 2 * zr * zi + ci;
+        zr = t;
+        i++;
+      }
+      if (i < maxIter) {
+        const s = Math.sqrt(i / maxIter);
+        buf[k]     = 255 * (0.5 + 0.5 * Math.cos(6.2831853 * (s * 1.5 + 0.55)));
+        buf[k + 1] = 255 * (0.5 + 0.5 * Math.cos(6.2831853 * (s * 1.5 + 0.65)));
+        buf[k + 2] = 255 * (0.5 + 0.5 * Math.cos(6.2831853 * (s * 1.5 + 0.75)));
+      }
+      buf[k + 3] = 255;
+      k += 4;
+    }
+  }
+  self.postMessage({ gen, y0, rows, buf }, [buf.buffer]);
+};`;
+const workerURL = URL.createObjectURL(new Blob([workerSrc], { type: "text/javascript" }));
+const pool = [];
+function getWorkers(n) {
+  while (pool.length < n) {
+    const w = new Worker(workerURL);
+    w.busy = false;
+    w.onmessage = (e) => onStrip(w, e.data);
+    pool.push(w);
+  }
+  return pool.slice(0, n);
+}
+
+let cpuJob = null;     // current progressive render
+let calib = null;      // pending calibration { resolve }
+const STRIP = 8;
+
+function dispatch(w) {
+  const j = cpuJob;
+  if (!j || j.next >= j.H || !j.workers.includes(w)) { w.busy = false; return; }
+  const y0 = j.next, rows = Math.min(STRIP, j.H - y0);
+  j.next += rows;
+  w.busy = true;
+  w.postMessage({ gen: j.gen, y0, rows, ...j.params });
+}
+
+function onStrip(w, msg) {
+  if (msg.gen < 0) { w.busy = false; const c = calib; calib = null; if (c) c.resolve(); return; }
+  const j = cpuJob;
+  if (j && msg.gen === j.gen) {
+    cpuCtx.putImageData(new ImageData(msg.buf, j.W, msg.rows), 0, msg.y0);
+    j.done += msg.rows;
+    if (j.done >= j.H) {
+      const ms = performance.now() - j.t0;
+      cpuJob = null;
+      w.busy = false;
+      j.resolve(ms);
+      return;
+    }
+  }
+  dispatch(w);
+}
+
+function renderCPU(nWorkers) {
+  const { W, H, maxIter } = size();
+  cpuCanvas.width = W; cpuCanvas.height = H;
+  cpuCtx.fillStyle = "#0b1320"; cpuCtx.fillRect(0, 0, W, H);
+  return new Promise((resolve) => {
+    const gen = ++generation;
+    const workers = getWorkers(nWorkers);
+    cpuJob = { gen, W, H, next: 0, done: 0, workers, t0: performance.now(), resolve,
+               params: { W, H, cx: view.cx, cy: view.cy, scale: view.width / W, maxIter } };
+    for (const w of workers) if (!w.busy) dispatch(w);
+  });
+}
+
+// Time one core on a small image to estimate this device's single-core speed (pixels per ms).
+async function cpuPixelsPerMs(maxIter) {
+  const [w] = getWorkers(1);
+  while (w.busy) await new Promise((r) => setTimeout(r, 20));
+  const W = 128, H = 80;
+  const t0 = performance.now();
+  await new Promise((resolve) => {
+    calib = { resolve };
+    w.busy = true;
+    w.postMessage({ gen: -1, y0: 0, rows: H, W, H, cx: view.cx, cy: view.cy, scale: view.width / W, maxIter });
+  });
+  return (W * H) / Math.max(1, performance.now() - t0);
+}
+
+// Largest width whose estimated 1-core time is about AUTO_TARGET_MS, capped at 3840 px
+// and by the GPU's texture limit. (The image is scaled to fit the screen, so it may exceed it.)
+async function chooseAutoSize() {
+  const { maxIter } = size();
+  await cpuPixelsPerMs(maxIter);                          // warm-up (JIT)
+  const rate = await cpuPixelsPerMs(maxIter);
+  let cap = 3840;
+  if (gpu.ok) cap = Math.min(cap, gpu.maxTex);
+  const fit = Math.sqrt(rate * AUTO_TARGET_MS * 1.6);     // W such that W * (W / 1.6) / rate = target
+  autoW = Math.max(160, Math.min(cap, Math.floor(fit / 16) * 16));
+  $("res").options[0].textContent = `Auto (${autoW} × ${Math.round(autoW * 10 / 16)})`;
+}
+
+// ---------- GPU: WebGPU compute kernel, one thread per pixel ----------
+const kernelWGSL = `struct Params {
+  center  : vec2f,   // middle of the view in the complex plane
+  scale   : f32,     // complex-plane units per pixel
+  maxIter : u32,
+  size    : vec2u,   // image width, height
+};
+@group(0) @binding(0) var<uniform> p : Params;
+@group(0) @binding(1) var img : texture_storage_2d<rgba8unorm, write>;
+
+// One GPU thread computes exactly one pixel.
+@compute @workgroup_size(8, 8)
+fn mandelbrot(@builtin(global_invocation_id) id : vec3u) {
+  if (id.x >= p.size.x || id.y >= p.size.y) { return; }
+  let w = f32(p.size.x);
+  let h = f32(p.size.y);
+  let c = p.center + vec2f(f32(id.x) + 0.5 - 0.5 * w,
+                           0.5 * h - f32(id.y) - 0.5) * p.scale;
+  var z = vec2f(0.0, 0.0);
+  var i = 0u;
+  loop {
+    if (i >= p.maxIter || dot(z, z) > 4.0) { break; }
+    z = vec2f(z.x * z.x - z.y * z.y, 2.0 * z.x * z.y) + c;
+    i = i + 1u;
+  }
+  var col = vec3f(0.0);
+  if (i < p.maxIter) {
+    let s = sqrt(f32(i) / f32(p.maxIter));
+    col = 0.5 + 0.5 * cos(6.2831853 * (vec3f(s * 1.5) + vec3f(0.55, 0.65, 0.75)));
+  }
+  textureStore(img, vec2i(id.xy), vec4f(col, 1.0));
+}`;
+$("kernelSrc").textContent = kernelWGSL;
+
+const blitWGSL = `
+@group(0) @binding(0) var tex : texture_2d<f32>;
+struct VO { @builtin(position) pos : vec4f };
+@vertex fn vs(@builtin(vertex_index) i : u32) -> VO {
+  var q = array<vec2f, 3>(vec2f(-1.0, -1.0), vec2f(3.0, -1.0), vec2f(-1.0, 3.0));
+  return VO(vec4f(q[i], 0.0, 1.0));
+}
+@fragment fn fs(v : VO) -> @location(0) vec4f {
+  return textureLoad(tex, vec2i(v.pos.xy), 0);
+}`;
+
+const gpu = { ok: false, name: "" };
+async function initGPU() {
+  try {
+    if (!navigator.gpu) throw new Error("this browser does not support WebGPU.");
+    const adapter = await navigator.gpu.requestAdapter();
+    if (!adapter) throw new Error("no WebGPU adapter is available (WebGPU may be disabled).");
+    const info = adapter.info || {};
+    gpu.name = [info.vendor, info.architecture, info.description].filter(Boolean).join(" · ");
+    gpu.maxTex = adapter.limits.maxTextureDimension2D || 8192;
+    gpu.device = await adapter.requestDevice();
+    gpu.device.lost.then(() => { gpu.ok = false; $("btnGpu").disabled = true; });
+    gpu.ctx = gpuCanvas.getContext("webgpu");
+    gpu.format = navigator.gpu.getPreferredCanvasFormat();
+    gpu.uniform = gpu.device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    gpu.compute = gpu.device.createComputePipeline({
+      layout: "auto",
+      compute: { module: gpu.device.createShaderModule({ code: kernelWGSL }), entryPoint: "mandelbrot" },
+    });
+    const blitModule = gpu.device.createShaderModule({ code: blitWGSL });
+    gpu.blit = gpu.device.createRenderPipeline({
+      layout: "auto",
+      vertex: { module: blitModule, entryPoint: "vs" },
+      fragment: { module: blitModule, entryPoint: "fs", targets: [{ format: gpu.format }] },
+      primitive: { topology: "triangle-list" },
+    });
+    gpu.ok = true;
+  } catch (err) {
+    $("btnGpu").disabled = true;
+    const w = $("warn");
+    w.style.display = "block";
+    w.innerHTML = "<b>GPU mode is not available here:</b> " + err.message +
+      " WebGPU works in recent Chrome and Edge, Chrome on Android 12+, and Safari on iOS/iPadOS/macOS 26+. " +
+      "You can still compare one CPU core with all cores, and watch the presenter's screen for the GPU.";
+  }
+}
+
+function ensureGPUTarget(W, H) {
+  if (gpu.W === W && gpu.H === H) return;
+  gpuCanvas.width = W; gpuCanvas.height = H;
+  gpu.ctx.configure({ device: gpu.device, format: gpu.format, alphaMode: "opaque" });
+  if (gpu.tex) gpu.tex.destroy();
+  gpu.tex = gpu.device.createTexture({
+    size: [W, H], format: "rgba8unorm",
+    usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+  });
+  gpu.computeBG = gpu.device.createBindGroup({
+    layout: gpu.compute.getBindGroupLayout(0),
+    entries: [{ binding: 0, resource: { buffer: gpu.uniform } }, { binding: 1, resource: gpu.tex.createView() }],
+  });
+  gpu.blitBG = gpu.device.createBindGroup({
+    layout: gpu.blit.getBindGroupLayout(0),
+    entries: [{ binding: 0, resource: gpu.tex.createView() }],
+  });
+  gpu.W = W; gpu.H = H;
+}
+
+async function gpuOnce(W, H, maxIter) {
+  const data = new ArrayBuffer(32), f = new Float32Array(data), u = new Uint32Array(data);
+  f[0] = view.cx; f[1] = view.cy; f[2] = view.width / W; u[3] = maxIter; u[4] = W; u[5] = H;
+  const t0 = performance.now();
+  gpu.device.queue.writeBuffer(gpu.uniform, 0, data);
+  const enc = gpu.device.createCommandEncoder();
+  const cp = enc.beginComputePass();
+  cp.setPipeline(gpu.compute);
+  cp.setBindGroup(0, gpu.computeBG);
+  cp.dispatchWorkgroups(Math.ceil(W / 8), Math.ceil(H / 8));
+  cp.end();
+  const rp = enc.beginRenderPass({ colorAttachments: [{
+    view: gpu.ctx.getCurrentTexture().createView(), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 1] }] });
+  rp.setPipeline(gpu.blit);
+  rp.setBindGroup(0, gpu.blitBG);
+  rp.draw(3);
+  rp.end();
+  gpu.device.queue.submit([enc.finish()]);
+  await gpu.device.queue.onSubmittedWorkDone();
+  return performance.now() - t0;
+}
+
+async function renderGPU() {
+  const { W, H, maxIter } = size();
+  ++generation; cpuJob = null;
+  ensureGPUTarget(W, H);
+  await gpuOnce(W, H, maxIter);                 // warm-up (first launch includes setup)
+  const times = [];
+  for (let r = 0; r < 3; r++) times.push(await gpuOnce(W, H, maxIter));
+  return Math.min(...times);                    // best of three
+}
+
+// ---------- UI ----------
+const LABEL = { cpu1: "CPU · 1 core", cpuN: `CPU · ${nCores} cores`, gpu: "GPU (WebGPU)" };
+const COLOR = { cpu1: "#285fbd", cpuN: "#cb5a20", gpu: "#087e8b" };
+
+function fmtMs(ms) { return ms < 1000 ? ms.toFixed(ms < 10 ? 2 : 0) + " ms" : (ms / 1000).toFixed(2) + " s"; }
+function fmtX(x) { return x >= 10 ? Math.round(x) + "×" : x.toFixed(1) + "×"; }
+
+function showMode(m) {
+  mode = m;
+  for (const b of document.querySelectorAll(".modes button")) b.classList.toggle("active", b.dataset.mode === m);
+  cpuCanvas.style.visibility = m === "gpu" ? "hidden" : "visible";
+  gpuCanvas.style.visibility = m === "gpu" ? "visible" : "hidden";
+  const badge = $("badge");
+  badge.textContent = LABEL[m]; badge.style.background = COLOR[m];
+  $("sMode").textContent = LABEL[m];
+}
+
+async function run(m) {
+  if (m === "gpu" && !gpu.ok) m = "cpuN";
+  showMode(m);
+  const { W, H } = size();
+  $("sPix").textContent = `${W} × ${H} = ${(W * H / 1e6).toFixed(2)} M`;
+  $("sTime").textContent = "running…"; $("sRate").textContent = "—";
+  $("sZoom").textContent = view.width.toExponential(2);
+  $("busy").style.display = "block";
+  const myGen = generation + 1;
+  const ms = m === "gpu" ? await renderGPU() : await renderCPU(m === "cpu1" ? 1 : nCores);
+  if (generation !== myGen) return null;         // superseded by a newer render
+  $("busy").style.display = "none";
+  $("sTime").textContent = fmtMs(ms);
+  $("sRate").textContent = (W * H / 1e6 / (ms / 1000)).toFixed(1) + " Mpx/s";
+  return ms;
+}
+
+async function testDevice() {
+  if (testing) return;
+  testing = true;
+  $("test").disabled = true; $("test").textContent = "Testing…";
+  try {
+    if ($("res").value === "auto") await chooseAutoSize();
+    const { W, H } = size();
+    const t = {};
+    for (const m of ["cpu1", "cpuN", "gpu"]) {
+      if (m === "gpu" && !gpu.ok) continue;
+      const ms = await run(m);
+      if (ms == null) return;
+      t[m] = ms;
+    }
+    const tb = $("results").querySelector("tbody");
+    tb.innerHTML = "";
+    for (const m of Object.keys(t)) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td style="color:${COLOR[m]};font-weight:bold">${LABEL[m]}</td>` +
+        `<td class="num">${fmtMs(t[m])}</td><td class="num">${(W * H / 1e6 / (t[m] / 1000)).toFixed(1)}</td>` +
+        `<td class="num">${fmtX(t.cpu1 / t[m])}</td>`;
+      tb.appendChild(tr);
+    }
+    $("results").hidden = false;
+    $("card").style.display = "block";
+    if (t.gpu) {
+      $("cardBig").textContent = `${fmtX(t.cpu1 / t.gpu)} faster than one CPU core`;
+      $("cardLine").textContent = `and ${fmtX(t.cpuN / t.gpu)} faster than all ${nCores} cores together (${W} × ${H} pixels).`;
+    } else {
+      $("cardBig").textContent = "not available";
+      $("cardLine").textContent = `All ${nCores} CPU cores were ${fmtX(t.cpu1 / t.cpuN)} faster than one core (${W} × ${H} pixels).`;
+    }
+    $("cardDevice").textContent = gpu.name ? `GPU reported by the browser: ${gpu.name}` : "";
+  } finally {
+    testing = false;
+    $("test").disabled = false; $("test").textContent = "Test again";
+  }
+}
+
+for (const b of document.querySelectorAll(".modes button")) b.addEventListener("click", () => run(b.dataset.mode));
+$("test").addEventListener("click", testDevice);
+$("reset").addEventListener("click", () => { Object.assign(view, HOME); run(mode); });
+$("deep").addEventListener("click", () => { Object.assign(view, DEEP); run(mode); });
+$("zoomOut").addEventListener("click", () => { view.width *= 2; run(mode); });
+$("res").addEventListener("change", async () => { if ($("res").value === "auto") await chooseAutoSize(); run(mode); });
+$("iter").addEventListener("change", async () => { if ($("res").value === "auto") await chooseAutoSize(); run(mode); });
+
+function zoomAt(ev, factor) {
+  const r = $("stage").getBoundingClientRect();
+  const fx = (ev.clientX - r.left) / r.width - 0.5, fy = (ev.clientY - r.top) / r.height - 0.5;
+  view.cx += fx * view.width;
+  view.cy -= fy * view.width * 10 / 16;
+  view.width *= factor;
+  run(mode);
+}
+$("stage").addEventListener("click", (ev) => zoomAt(ev, ev.shiftKey ? 2 : 0.5));
+$("stage").addEventListener("contextmenu", (ev) => { ev.preventDefault(); zoomAt(ev, 2); });
+
+document.addEventListener("keydown", (ev) => {
+  if (ev.target.tagName === "SELECT") return;
+  const k = ev.key.toLowerCase();
+  if (k === "1") run("cpu1");
+  else if (k === "2") run("cpuN");
+  else if (k === "3") run("gpu");
+  else if (k === "t" || k === "c") testDevice();
+  else if (k === "d") $("deep").click();
+  else if (k === "r") $("reset").click();
+});
+
+// Start with a quick, light render (GPU if available, else all CPU cores) so nothing heavy runs on page load.
+(async () => {
+  await initGPU();
+  await chooseAutoSize();
+  run(gpu.ok ? "gpu" : "cpuN");
+})();
+</script>
+</body>
+</html>
